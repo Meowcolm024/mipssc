@@ -1,6 +1,8 @@
 import Reg.*
 
 def test(implicit writer: Writer): Unit =
+  data(("xs", "word", "1 2 3 4 5 -6 -7 -8 -9 -10") :: Nil)
+  text
   func("main") {
     S(1) := Label("xs")
     S(2) := 0
@@ -20,7 +22,7 @@ def test(implicit writer: Writer): Unit =
     V(0) := 10
     syscall
   }
-  
+
   func("abs") {
     `if`(Zero < A(0)) {
       V(0) := A(0)
@@ -29,7 +31,29 @@ def test(implicit writer: Writer): Unit =
     }
   }
 
+def suml(implicit writer: Writer): Unit =
+  data(("xs", "word", "1 2 3 4 5 -6 -7 -8 -9 -10") :: Nil)
+  text
+  func("main", true) {
+    S(0) := Label("xs")
+    T(1) := S(0) + 36
+    A(0) := 0
+    `while`(S(0) < T(1)) {
+      T(0) := S(0).deref()
+      S(0) := S(0) + 4
+      `if`(T(0) < Zero) {
+        continue
+      } {
+        A(0) := A(0) + T(0)
+      }
+    }
+    V(0) := 1
+    syscall
+    V(0) := 10
+    syscall
+  }
+
 @main def hello: Unit =
   val w = new Writer
-  test(w)
+  suml(w)
   w.acc.foreach(println)

@@ -2,6 +2,11 @@ class Writer:
   var acc: List[String] = Nil
   def tell(msg: List[String]): Unit = acc ++= msg
 
+  // stack to store loop labels
+  var loop: List[(String, String)] = Nil
+  def push(start: String, exit: String): Unit = loop = (start, exit) :: loop
+  def pop(): Unit = loop = loop.tail
+
 object Label:
   var idx = 0
   def get: String =
@@ -74,10 +79,6 @@ enum Reg:
 
   def <<(i: Int)(implicit writer: Writer): BinOp = BinOp.Sll(this, i)
 
-  def <#(r: Reg | Int): BinOp = r match
-    case r: Reg => BinOp.Slt(this, r)
-    case r: Int => BinOp.Slti(this, r)
-
   def <[A](r: A): (Reg, Cond, A) = (this, Cond.Lt, r)
   def <=[A](r: A): (Reg, Cond, A) = (this, Cond.Le, r)
   def >[A](r: A): (Reg, Cond, A) = (this, Cond.Gt, r)
@@ -111,9 +112,19 @@ def `while`(cond: (Reg, Cond, Reg))(body: => Unit)(implicit
   val exit = Label.get
   val (x, p, y) = cond
   writer.tell(s"$start:" :: s"${p.neg.bstr} $x, $y, $exit" :: Nil)
+  writer.push(start, exit)
   body
+  writer.pop()
   writer.tell(s"j $start" :: Nil)
   writer.tell(s"$exit:" :: Nil)
+
+def break(implicit writer: Writer): Unit =
+  val exit = writer.loop.head._2
+  writer.tell(s"j $exit" :: Nil)
+
+def continue(implicit writer: Writer): Unit =
+  val start = writer.loop.head._1
+  writer.tell(s"j $start" :: Nil)
 
 def `if`(cond: (Reg, Cond, Reg))(body: => Unit)(elz: => Unit)(implicit
     writer: Writer
@@ -128,8 +139,11 @@ def `if`(cond: (Reg, Cond, Reg))(body: => Unit)(elz: => Unit)(implicit
   elz
   writer.tell(s"$skip:" :: Nil)
 
-def func(name: String)(body: => Unit)(implicit writer: Writer): Unit =
+def func(name: String, global: Boolean = false)(body: => Unit)(implicit
+    writer: Writer
+): Unit =
   import Reg.*
+  if global then writer.tell(s".globl $name" :: Nil) else ()
   writer.tell(s"$name:" :: Nil)
   Sp := Sp - 4
   Sp.deref() := Ra
@@ -145,3 +159,18 @@ def syscall(implicit writer: Writer): Unit = writer.tell("syscall" :: Nil)
 
 def goto(label: String)(implicit writer: Writer): Unit =
   writer.tell(s"j $label" :: Nil)
+
+def jump(cond: (Reg, Cond, Reg), label: String)(implicit writer: Writer): Unit =
+  val (x, p, y) = cond
+  writer.tell(s"${p.bstr} $x, $y, $label" :: Nil)
+
+def block(label: String)(body: => Unit)(implicit writer: Writer): Unit =
+  writer.tell(s"$label:" :: Nil)
+  body
+
+def data(dts: List[(String, String, String)])(implicit writer: Writer): Unit =
+  writer.tell(".data" :: Nil)
+  writer.tell(dts.map { case (label, ty, arr) => s"$label: .$ty $arr" })
+
+def text(implicit writer: Writer): Unit =
+  writer.tell(".text" :: Nil)
