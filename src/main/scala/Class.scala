@@ -1,6 +1,7 @@
 class Writer:
   var acc: List[String] = Nil
-  def tell(msg: List[String]): Unit = acc ++= msg
+  def tell(msg: String, label: Boolean = false): Unit =
+    acc ++= List((if label then "" else "  ") ++ msg)
 
   // stack to store loop labels
   var loop: List[(String, String)] = Nil
@@ -18,7 +19,7 @@ case class Label(lbl: String):
 
 case class Addr(r: Reg, i: Int):
   def :=(r: Reg)(implicit writer: Writer): Unit =
-    writer.tell(s"sw $r, $this" :: Nil)
+    writer.tell(s"sw $r, $this")
 
   override def toString: String = s"$i($r)"
 
@@ -31,12 +32,12 @@ enum BinOp:
   case Slt(r: Reg, e: Reg)
 
   def write(res: Reg)(implicit writer: Writer): Unit = this match
-    case Addi(r, i) => writer.tell(s"addi $res, $r, $i" :: Nil)
-    case Add(r, i)  => writer.tell(s"add $res, $r, $i" :: Nil)
-    case Sub(r, i)  => writer.tell(s"sub $res, $r, $i" :: Nil)
-    case Sll(r, i)  => writer.tell(s"sll $res, $r, $i" :: Nil)
-    case Slti(r, i) => writer.tell(s"slti $res, $r, $i" :: Nil)
-    case Slt(r, i)  => writer.tell(s"slt $res, $r, $i" :: Nil)
+    case Addi(r, i) => writer.tell(s"addi $res, $r, $i")
+    case Add(r, i)  => writer.tell(s"add $res, $r, $i")
+    case Sub(r, i)  => writer.tell(s"sub $res, $r, $i")
+    case Sll(r, i)  => writer.tell(s"sll $res, $r, $i")
+    case Slti(r, i) => writer.tell(s"slti $res, $r, $i")
+    case Slt(r, i)  => writer.tell(s"slt $res, $r, $i")
 
 enum Reg:
   case Zero
@@ -58,11 +59,11 @@ enum Reg:
     case _                        => throw Exception("invalid register")
 
   def :=(i: Any)(implicit writer: Writer): Unit = i match
-    case i: Label                  => writer.tell(s"la $this, $i" :: Nil)
-    case i: Int                    => writer.tell(s"li $this, $i" :: Nil)
-    case i: Reg                    => writer.tell(s"move $this, $i" :: Nil)
+    case i: Label                  => writer.tell(s"la $this, $i")
+    case i: Int                    => writer.tell(s"li $this, $i")
+    case i: Reg                    => writer.tell(s"move $this, $i")
     case i: BinOp                  => i.write(this)
-    case i: Addr                   => writer.tell(s"lw $this, $i" :: Nil)
+    case i: Addr                   => writer.tell(s"lw $this, $i")
     case (x: Reg, Cond.Lt, y: Reg) => BinOp.Slt(x, y).write(this)
     case (x: Reg, Cond.Lt, y: Int) => BinOp.Slti(x, y).write(this)
     case _                         => throw Exception("unknown operation")
@@ -111,20 +112,21 @@ def `while`(cond: (Reg, Cond, Reg))(body: => Unit)(implicit
   val start = Label.get
   val exit = Label.get
   val (x, p, y) = cond
-  writer.tell(s"$start:" :: s"${p.neg.bstr} $x, $y, $exit" :: Nil)
+  writer.tell(s"$start:", true)
+  writer.tell(s"${p.neg.bstr} $x, $y, $exit")
   writer.push(start, exit)
   body
   writer.pop()
-  writer.tell(s"j $start" :: Nil)
-  writer.tell(s"$exit:" :: Nil)
+  writer.tell(s"j $start")
+  writer.tell(s"$exit:", true)
 
 def break(implicit writer: Writer): Unit =
   val exit = writer.loop.head._2
-  writer.tell(s"j $exit" :: Nil)
+  writer.tell(s"j $exit")
 
 def continue(implicit writer: Writer): Unit =
   val start = writer.loop.head._1
-  writer.tell(s"j $start" :: Nil)
+  writer.tell(s"j $start")
 
 def `if`(cond: (Reg, Cond, Reg))(body: => Unit)(elz: => Unit)(implicit
     writer: Writer
@@ -132,45 +134,45 @@ def `if`(cond: (Reg, Cond, Reg))(body: => Unit)(elz: => Unit)(implicit
   val skip = Label.get
   val els = Label.get
   val (x, p, y) = cond
-  writer.tell(s"${p.neg.bstr} $x, $y, $els" :: Nil)
+  writer.tell(s"${p.neg.bstr} $x, $y, $els")
   body
-  writer.tell(s"j $skip" :: Nil)
-  writer.tell(s"$els:" :: Nil)
+  writer.tell(s"j $skip")
+  writer.tell(s"$els:", true)
   elz
-  writer.tell(s"$skip:" :: Nil)
+  writer.tell(s"$skip:", true)
 
 def func(name: String, global: Boolean = false)(body: => Unit)(implicit
     writer: Writer
 ): Unit =
   import Reg.*
-  if global then writer.tell(s".globl $name" :: Nil) else ()
-  writer.tell(s"$name:" :: Nil)
+  if global then writer.tell(s".globl $name", true) else ()
+  writer.tell(s"$name:", true)
   Sp := Sp - 4
   Sp.deref() := Ra
   body
   Ra := Sp.deref()
   Sp := Sp + 4
-  writer.tell("jr $ra" :: Nil)
+  writer.tell("jr $ra")
 
 def call(fun: String)(implicit writer: Writer): Unit =
-  writer.tell(s"jal $fun" :: Nil)
+  writer.tell(s"jal $fun")
 
-def syscall(implicit writer: Writer): Unit = writer.tell("syscall" :: Nil)
+def syscall(implicit writer: Writer): Unit = writer.tell("syscall")
 
 def goto(label: String)(implicit writer: Writer): Unit =
-  writer.tell(s"j $label" :: Nil)
+  writer.tell(s"j $label")
 
 def jump(cond: (Reg, Cond, Reg), label: String)(implicit writer: Writer): Unit =
   val (x, p, y) = cond
-  writer.tell(s"${p.bstr} $x, $y, $label" :: Nil)
+  writer.tell(s"${p.bstr} $x, $y, $label")
 
 def block(label: String)(body: => Unit)(implicit writer: Writer): Unit =
-  writer.tell(s"$label:" :: Nil)
+  writer.tell(s"$label:", true)
   body
 
 def data(dts: List[(String, String, String)])(implicit writer: Writer): Unit =
-  writer.tell(".data" :: Nil)
-  writer.tell(dts.map { case (label, ty, arr) => s"$label: .$ty $arr" })
+  writer.tell(".data", true)
+  dts.foreach { case (label, ty, arr) => writer.tell(s"$label: .$ty $arr") }
 
 def text(implicit writer: Writer): Unit =
-  writer.tell(".text" :: Nil)
+  writer.tell(".text", true)
