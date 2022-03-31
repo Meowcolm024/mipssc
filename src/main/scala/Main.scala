@@ -2,20 +2,26 @@ import Reg.*
 
 def test(implicit writer: Writer): Unit =
   data { static("xs", "word", List(1, 2, 3, 4, 5, -6, -7, -8, -9, -10)) }
-  func("main") {
-    S(1) := Label("xs")
-    S(2) := 0
-    T(2) := S(1) + 40
+  func("main", true) {
+    val start = S(1)
+    val end = T(2)
+    val acc = S(2)
+    val tmp = T(1)
+    val arg = A(0)
 
-    `while`(S(1) < T(2)) {
-      T(1) := S(1).deref()
-      S(2) := S(2) + T(1)
-      S(1) := S(1) + 4
+    start := Label("xs")
+    acc := 0
+    end := start + 40
+
+    `while`(start < end) {
+      tmp := start.deref()
+      acc := acc + tmp
+      start := start + 4
     }
 
-    A(0) := S(2)
+    arg := acc
     call("abs")
-    A(0) := V(0)
+    arg := V(0)
     syscall(1)
     syscall(10)
   }
@@ -31,16 +37,22 @@ def test(implicit writer: Writer): Unit =
 def suml(implicit writer: Writer): Unit =
   data { static("xs", "word", List(1, 2, 3, 4, 5, -6, -7, -8, -9, -10)) }
   func("main", true) {
-    S(0) := Label("xs")
-    T(1) := S(0) + 36
-    A(0) := 0
-    `while`(S(0) < T(1)) {
-      T(0) := S(0).deref()
-      S(0) := S(0) + 4
-      `if`(T(0) < Zero) {
+    // bind registers to make it more readable
+    val start = S(0)
+    val end = T(1)
+    val acc = A(0)
+    val tmp = T(0)
+
+    start := Label("xs")
+    end := start + 40
+    acc := 0
+    `while`(start < end) {
+      tmp := start.deref()
+      start := start + 4
+      `if`(tmp < Zero) {
         continue
       } {
-        A(0) := A(0) + T(0)
+        acc := acc + tmp
       }
     }
     syscall(1)
@@ -49,5 +61,5 @@ def suml(implicit writer: Writer): Unit =
 
 @main def hello: Unit =
   val w = new Writer
-  suml(w)
+  test(w)
   w.acc.foreach(println)

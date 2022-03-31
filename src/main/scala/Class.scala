@@ -157,6 +157,16 @@ def func(name: String, global: Boolean = false)(body: => Unit)(implicit
 def call(fun: String)(implicit writer: Writer): Unit =
   writer.tell(s"jal $fun")
 
+def save(implicit writer: Writer): Unit =
+  import Reg.*
+  (0 to 7).foreach(i => Sp.deref(-(i + 1) * 4) := S(i))
+  Sp := Sp - 32
+
+def restore(implicit writer: Writer): Unit =
+  import Reg.*
+  Sp := Sp + 32
+  (0 to 7).foreach(i => S(i) := Sp.deref(-(i + 1) * 4))
+
 def syscall(code: Int)(implicit writer: Writer): Unit =
   Reg.V(0) := code
   writer.tell("syscall")
