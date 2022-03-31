@@ -157,7 +157,9 @@ def func(name: String, global: Boolean = false)(body: => Unit)(implicit
 def call(fun: String)(implicit writer: Writer): Unit =
   writer.tell(s"jal $fun")
 
-def syscall(implicit writer: Writer): Unit = writer.tell("syscall")
+def syscall(code: Int)(implicit writer: Writer): Unit =
+  Reg.V(0) := code
+  writer.tell("syscall")
 
 def goto(label: String)(implicit writer: Writer): Unit =
   writer.tell(s"j $label")
@@ -170,9 +172,13 @@ def block(label: String)(body: => Unit)(implicit writer: Writer): Unit =
   writer.tell(s"$label:", true)
   body
 
-def data(dts: List[(String, String, String)])(implicit writer: Writer): Unit =
+def data(sts: => Unit)(implicit writer: Writer): Unit =
   writer.tell(".data", true)
-  dts.foreach { case (label, ty, arr) => writer.tell(s"$label: .$ty $arr") }
-
-def text(implicit writer: Writer): Unit =
+  sts
   writer.tell(".text", true)
+
+def static(label: String, ty: String, vs: List[Int] | String)(implicit
+    writer: Writer
+): Unit = vs match
+  case vs: List[Int] => writer.tell(s"$label: .$ty ${vs.mkString(" ")}")
+  case vs: String    => writer.tell(s"$label: .$ty \"$vs\"")

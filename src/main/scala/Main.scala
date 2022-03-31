@@ -1,8 +1,7 @@
 import Reg.*
 
 def test(implicit writer: Writer): Unit =
-  data(("xs", "word", "1 2 3 4 5 -6 -7 -8 -9 -10") :: Nil)
-  text
+  data { static("xs", "word", List(1, 2, 3, 4, 5, -6, -7, -8, -9, -10)) }
   func("main") {
     S(1) := Label("xs")
     S(2) := 0
@@ -17,10 +16,8 @@ def test(implicit writer: Writer): Unit =
     A(0) := S(2)
     call("abs")
     A(0) := V(0)
-    V(0) := 1
-    syscall
-    V(0) := 10
-    syscall
+    syscall(1)
+    syscall(10)
   }
 
   func("abs") {
@@ -32,8 +29,7 @@ def test(implicit writer: Writer): Unit =
   }
 
 def suml(implicit writer: Writer): Unit =
-  data(("xs", "word", "1 2 3 4 5 -6 -7 -8 -9 -10") :: Nil)
-  text
+  data { static("xs", "word", List(1, 2, 3, 4, 5, -6, -7, -8, -9, -10)) }
   func("main", true) {
     S(0) := Label("xs")
     T(1) := S(0) + 36
@@ -47,10 +43,8 @@ def suml(implicit writer: Writer): Unit =
         A(0) := A(0) + T(0)
       }
     }
-    V(0) := 1
-    syscall
-    V(0) := 10
-    syscall
+    syscall(1)
+    syscall(10)
   }
 
 @main def hello: Unit =
