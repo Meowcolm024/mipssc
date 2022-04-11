@@ -1,65 +1,50 @@
+import java.io.{FileWriter, File}
 import Reg.*
 
-def test(implicit writer: Writer): Unit =
-  data { static("xs", "word", List(1, 2, 3, 4, 5, -6, -7, -8, -9, -10)) }
+def fib(implicit writer: Writer): Unit =
+  data {}
   func("main", true) {
-    val start = S(1)
-    val end = T(2)
-    val acc = S(2)
-    val tmp = T(1)
     val arg = A(0)
-
-    start := Label("xs")
-    acc := 0
-    end := start + 40
-
-    `while`(start < end) {
-      tmp := start.deref()
-      acc := acc + tmp
-      start := start + 4
-    }
-
-    arg := acc
-    call("abs")
-    arg := V(0)
+    val res = V(0)
+    arg := 10
+    call("fib")
+    arg := res
     syscall(1)
     syscall(10)
   }
-
-  func("abs") {
-    `if`(Zero < A(0)) {
-      V(0) := A(0)
+  func("fib") {
+    val arg = A(0)
+    val res = V(0)
+    val one = T(1)
+    val tmp = S(0)
+    T(1) := 1
+    `if`(arg ~= Zero) {
+      res := 0
     } {
-      V(0) := Zero - A(0)
-    }
-  }
-
-def suml(implicit writer: Writer): Unit =
-  data { static("xs", "word", List(1, 2, 3, 4, 5, -6, -7, -8, -9, -10)) }
-  func("main", true) {
-    // bind registers to make it more readable
-    val start = S(0)
-    val end = T(1)
-    val acc = A(0)
-    val tmp = T(0)
-
-    start := Label("xs")
-    end := start + 40
-    acc := 0
-    `while`(start < end) {
-      tmp := start.deref()
-      start := start + 4
-      `if`(tmp < Zero) {
-        continue
+      `if`(arg ~= one) {
+        res := 1
       } {
-        acc := acc + tmp
+        arg := arg - 1
+        push(arg)
+        call("fib")
+        pop(arg)
+        tmp := res
+        arg := arg - 1
+        push(tmp)
+        call("fib")
+        pop(tmp)
+        res := tmp + res
       }
     }
-    syscall(1)
-    syscall(10)
   }
 
-@main def hello: Unit =
+def exec(prog: Writer => Unit, out: String = "out.asm"): Unit =
   val w = new Writer
-  test(w)
+  prog(w)
   w.acc.foreach(println)
+  val fileWriter = new FileWriter(new File(out))
+  fileWriter.write(w.acc.mkString("\n"))
+  fileWriter.close()
+
+@main def main: Unit =
+  exec(fib)

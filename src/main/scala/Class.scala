@@ -9,10 +9,17 @@ class Writer:
   def pop(): Unit = loop = loop.tail
 
 object Label:
-  var idx = 0
-  def get: String =
-    idx += 1
-    s"label_$idx"
+  enum Type:
+    case Normal
+    case Loop
+    case If
+  var normal = 0
+  var loop = 0
+  var ifbr = 0
+  def get(ty: Type = Type.Normal): String = ty match
+    case Type.Normal => normal += 1; s"label_$normal"
+    case Type.Loop   => loop += 1; s"_$loop"
+    case Type.If     => ifbr += 1; s"_$ifbr"
 
 case class Label(lbl: String):
   override def toString: String = lbl
@@ -52,13 +59,15 @@ enum Reg:
     case Zero                     => "$zero"
     case S(i) if 0 <= i && i <= 7 => "$s" ++ i.toString
     case T(i) if 0 <= i && i <= 7 => "$t" ++ i.toString
-    case A(i) if 0 <= i && i <= 1 => "$a" ++ i.toString
+    case A(i) if 0 <= i && i <= 2 => "$a" ++ i.toString
     case V(i) if 0 <= i && i <= 1 => "$v" ++ i.toString
     case Sp                       => "$sp"
     case Ra                       => "$ra"
     case _                        => throw Exception("invalid register")
 
-  def :=(i: Any)(implicit writer: Writer): Unit = i match
+  type Assignable = Label | Int | Reg | BinOp | Addr | (Reg, Cond, Reg | Int)
+
+  def :=(i: Assignable)(implicit writer: Writer): Unit = i match
     case i: Label                  => writer.tell(s"la $this, $i")
     case i: Int                    => writer.tell(s"li $this, $i")
     case i: Reg                    => writer.tell(s"move $this, $i")
@@ -109,8 +118,9 @@ enum Cond:
 def `while`(cond: (Reg, Cond, Reg))(body: => Unit)(implicit
     writer: Writer
 ): Unit =
-  val start = Label.get
-  val exit = Label.get
+  val loopidx = Label.get(Label.Type.Loop)
+  val start = "loop" ++ loopidx
+  val exit = "exit" ++ loopidx
   val (x, p, y) = cond
   writer.tell(s"$start:", true)
   writer.tell(s"${p.neg.bstr} $x, $y, $exit")
@@ -131,8 +141,9 @@ def continue(implicit writer: Writer): Unit =
 def `if`(cond: (Reg, Cond, Reg))(body: => Unit)(elz: => Unit)(implicit
     writer: Writer
 ): Unit =
-  val skip = Label.get
-  val els = Label.get
+  val ifidx = Label.get(Label.Type.If)
+  val skip = "skip" ++ ifidx
+  val els = "else" ++ ifidx
   val (x, p, y) = cond
   writer.tell(s"${p.neg.bstr} $x, $y, $els")
   body
@@ -154,13 +165,34 @@ def func(name: String, global: Boolean = false)(body: => Unit)(implicit
   Sp := Sp + 4
   writer.tell("jr $ra")
 
-def call(fun: String)(implicit writer: Writer): Unit =
+def call(
+    fun: String,
+    a0: Reg = Reg.A(0),
+    a1: Reg = Reg.A(1),
+    a2: Reg = Reg.A(2)
+)(implicit
+    writer: Writer
+): Unit =
+  import Reg.*
+  if a0 != A(0) then A(0) := a0
+  if a1 != A(1) then A(1) := a1
+  if a2 != A(2) then A(2) := a2
   writer.tell(s"jal $fun")
 
 def save(implicit writer: Writer): Unit =
   import Reg.*
   (0 to 7).foreach(i => Sp.deref(-(i + 1) * 4) := S(i))
   Sp := Sp - 32
+
+def push(r: Reg)(implicit writer: Writer): Unit =
+  import Reg.*
+  Sp := Sp - 4
+  Sp.deref() := r
+
+def pop(r: Reg)(implicit writer: Writer): Unit =
+  import Reg.*
+  r := Sp.deref()
+  Sp := Sp + 4
 
 def restore(implicit writer: Writer): Unit =
   import Reg.*
@@ -170,6 +202,12 @@ def restore(implicit writer: Writer): Unit =
 def syscall(code: Int)(implicit writer: Writer): Unit =
   Reg.V(0) := code
   writer.tell("syscall")
+
+def ret(implicit writer: Writer): Unit =
+  import Reg.*
+  Ra := Sp.deref()
+  Sp := Sp + 4
+  writer.tell("jr $ra")
 
 def goto(label: String)(implicit writer: Writer): Unit =
   writer.tell(s"j $label")

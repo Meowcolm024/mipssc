@@ -3,3 +3,4 @@
 .vscode
 .project
 target
+src/main/scala/Prog.scala
